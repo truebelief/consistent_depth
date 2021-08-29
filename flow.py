@@ -124,7 +124,7 @@ class Flow:
         ]
 
         tmp = image_io.load_raw_float32_image(
-            pjoin(self.path, "color_down", "frame_{:06d}.raw".format(0))
+            pjoin(self.path, "color_down", os.path.splitext(os.path.basename(frame1_fns[0]))[0]+'.raw')
         )
         size = tmp.shape[:2][::-1]
         print("Resizing flow to", size)

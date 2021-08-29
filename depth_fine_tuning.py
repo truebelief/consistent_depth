@@ -49,7 +49,8 @@ class DepthFineTuningParams:
             help="Learning rate for the training. If <= 0 it will be set"
             " automatically to the default for the specified model adapter.")
         parser.add_argument("--batch_size", type=int, default=4)
-        parser.add_argument("--num_epochs", type=int, default=20)
+        # parser.add_argument("--num_epochs", type=int, default=20)
+        parser.add_argument("--num_epochs", type=int, default=10)
 
         parser.add_argument("--log_dir", help="folder to log tensorboard summary")
 
@@ -161,6 +162,7 @@ class DepthFineTuner:
         self.reference_disparity = {}
         self.vis_depth_scale = None
 
+
     def save_depth(self, dir: str = None, frames=None):
         if dir is None:
             dir = self.out_dir
@@ -198,10 +200,10 @@ class DepthFineTuner:
         with SuppressedStdout():
             visualization.visualize_depth_dir(depth_dir, depth_dir, force=True)
 
-    def fine_tune(self, writer=None):
+    def fine_tune(self, writer=None, valid_frames=None):
         meta_file = pjoin(self.range_dir, "metadata_scaled.npz")
 
-        dataset = VideoDataset(self.base_dir, meta_file)
+        dataset = VideoDataset(self.base_dir, meta_file, valid_frames)
         train_data_loader = DataLoader(
             dataset,
             batch_size=self.params.batch_size,
@@ -220,8 +222,7 @@ class DepthFineTuner:
         torch.backends.cudnn.enabled = True
         torch.backends.cudnn.benchmark = True
 
-        criterion = JointLoss(self.params,
-            parameters_init=[p.clone() for p in self.model.parameters()])
+        criterion = JointLoss(self.params,parameters_init=[p.clone() for p in self.model.parameters()])
 
         if writer is None:
             log_dir = pjoin(self.out_dir, "tensorboard")
@@ -244,13 +245,9 @@ class DepthFineTuner:
             return "_e{:04d}_iter{:06d}".format(epoch, niters)
 
         def validate(epoch, niters):
-            loss_meta = self.eval_and_save(
-                criterion, val_data_loader, suffix(epoch, niters)
-            )
+            loss_meta = self.eval_and_save(criterion, val_data_loader, suffix(epoch, niters))
             if writer is not None:
-                log_loss_stats(
-                    writer, "validation", loss_meta, epoch, log_histogram=True
-                )
+                log_loss_stats(writer, "validation", loss_meta, epoch, log_histogram=True)
             print(f"Done Validation for epoch {epoch} ({niters} iterations)")
 
         self.vis_depth_scale = None

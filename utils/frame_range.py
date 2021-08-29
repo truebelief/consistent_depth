@@ -31,8 +31,9 @@ class FrameRange:
         self,
         frame_range: OptionalSet,
         num_frames: int = None,
+        start_frame: int = 0,
     ):
-        full_range = OptionalSet(set=set(range(num_frames))
+        full_range = OptionalSet(set=set(range(start_frame,start_frame+num_frames))
             if num_frames is not None else None)
 
         self.update(frame_range.intersection(full_range))

@@ -34,24 +34,24 @@ class COLMAPParams:
             default='colmap'
         )
         parser.add_argument(
-            "--sparse", help="disable dense reconstruction", action='store_true'
+            "--sparse", help="disable dense reconstruction", default=False
         )
         parser.add_argument(
-            "--initialize_pose", help="Intialize Pose", action='store_true'
+            "--initialize_pose", help="Intialize Pose", default=False
         )
-        parser.add_argument(
-            "--camera_params", help="prior camera parameters", default=None
-        )
-        parser.add_argument(
-            "--camera_model", help="camera_model", default='SIMPLE_PINHOLE'
-        )
+        # parser.add_argument(
+        #     "--camera_params", help="prior camera parameters", default=None
+        # )
+        # parser.add_argument(
+        #     "--camera_model", help="camera_model", default='SIMPLE_PINHOLE'
+        # )
         parser.add_argument(
             "--refine_intrinsics",
             help="refine camera parameters. Not used when camera_params is None",
-            action="store_true"
+            default=True
         )
         parser.add_argument(
-            "--matcher", choices=["exhaustive", "sequential"], default="exhaustive",
+            "--matcher", choices=["exhaustive", "sequential"], default="sequential",
             help="COLMAP matcher ('exhaustive' or 'sequential')"
         )
 

@@ -125,25 +125,28 @@ def make_video(
     ext: str = ".mp4",
     size: Optional[Tuple[int, int]] = None,
     crf: int = 1,
+    base_frame: int = 0
 ) -> None:
     out_fn = out_prefix + ext
     if not os.path.isfile(out_fn):
         cmd = [
             ffmpeg,
+            "-y",
+            "-start_number", str(base_frame),
             "-r", "30",
-            "-i", frame_fmt,
+            "-i",
+            "/home/truebelief/xzx/prj/insertIQ/maais_publish/intermediate/video/meta/shelf1/blender_data/251_317/depth_data/color_down_png/frame_%06d.png",
             "-vcodec", "libx264",
             "-pix_fmt", "yuv420p",
             "-crf", str(crf),
             "-vf", "pad=ceil(iw/2)*2:ceil(ih/2)*2",
             out_fn,
         ]
-        print(subprocess.run(cmd, check=True))
-
+    print(subprocess.run(cmd, check=True))
     # resize the video if size is specified
     if size is None:
         return
-    in_size = frame_size(frame_fmt)
+    in_size = frame_size(frame_fmt,frame_index=base_frame)
     if in_size == size:
         return
 
@@ -162,16 +165,16 @@ def make_video(
     print(subprocess.run(resize_cmd, check=True))
 
 
-def make_overlay(depth_fmt: str, color_fmt: str, overlay_fmt: str) -> None:
+def make_overlay(depth_fmt: str, color_fmt: str, overlay_fmt: str, base_frame:int) -> None:
     n = num_frames(os.path.dirname(color_fmt), os.path.splitext(color_fmt)[-1])
     for i in range(n):
-        color = cv2.imread(color_fmt % i)
-        depth = cv2.imread(depth_fmt % i)
+        color = cv2.imread(color_fmt % (i+base_frame))
+        depth = cv2.imread(depth_fmt % (i+base_frame))
         if depth.shape != color.shape:
             depth = cv2.resize(depth, color.shape[:2][::-1])
         gray = cv2.cvtColor(color, cv2.COLOR_BGR2GRAY)
         overlay = gray.reshape(gray.shape[:2] + (-1,)) / 2.0 + depth / 2.0
-        cv2.imwrite(overlay_fmt % i, overlay)
+        cv2.imwrite(overlay_fmt % (i+base_frame), overlay)
 
 
 def stack_videos(
@@ -207,9 +210,10 @@ def make_depth_videos(
     out_prefix: str,
     ext: str = ".mp4",
     size: Optional[Tuple[int, int]] = None,
+    base_frame: int=0
 ) -> None:
     # make a video using the depth frames
-    make_video(ffmpeg, depth_fmt, out_prefix, ext=ext, size=size)
+    make_video(ffmpeg, depth_fmt, out_prefix, ext=ext, size=size,base_frame=base_frame)
 
     # color depth overlay
     overlay_prefix = out_prefix + "-overlay"
@@ -220,8 +224,8 @@ def make_depth_videos(
     overlay_dir = out_prefix
     os.makedirs(overlay_dir, exist_ok=True)
     overlay_fmt = pjoin(overlay_dir, os.path.basename(depth_fmt))
-    make_overlay(depth_fmt, color_fmt, overlay_fmt)
-    make_video(ffmpeg, overlay_fmt, overlay_prefix, ext=ext, size=size)
+    make_overlay(depth_fmt, color_fmt, overlay_fmt,base_frame)
+    make_video(ffmpeg, overlay_fmt, overlay_prefix, ext=ext, size=size,base_frame=base_frame)
     shutil.rmtree(overlay_dir)
     stack_videos(
         ffmpeg,
@@ -237,7 +241,9 @@ def main(args):
 
     args = augment_args(args)
 
-    size = frame_size(pjoin(args.color_dir, args.frame_fmt))
+    base_frame = int(os.path.basename(os.path.dirname(args.frame_path)).split('_')[0])-1
+
+    size = frame_size(pjoin(args.color_dir, args.frame_fmt),base_frame)
 
     os.makedirs(args.out_dir, exist_ok=True)
 
@@ -247,6 +253,7 @@ def main(args):
         pjoin(args.color_dir, args.frame_fmt),
         color_video_prefix,
         ext=args.ext,
+        base_frame=base_frame
     )
 
     depth_video_prefixes = [pjoin(args.out_dir, name) for name in args.depth_names]
@@ -258,6 +265,7 @@ def main(args):
             prefix,
             size=size,
             ext=args.ext,
+            base_frame=base_frame
         )
     if len(args.depth_dirs) > 0:
         stack_videos(

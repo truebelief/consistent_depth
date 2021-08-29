@@ -8,26 +8,66 @@ from monodepth.depth_model_registry import get_depth_model, get_depth_model_list
 from depth_fine_tuning import DepthFineTuningParams
 from scale_calibration import ScaleCalibrationParams
 from utils import frame_sampling, frame_range
-from tools.colmap_processor import COLMAPParams
-from tools.make_video import MakeVideoParams
+from consistent_depth.tools.colmap_processor import COLMAPParams
+from consistent_depth.tools.make_video import MakeVideoParams
+
+
+import os
+import glob
+# fname='mall_front_p1'
+# in_path="/home/truebelief/xzx/prj/depth/consistent_depth/data/videos/"
+# in_video=fname+".mp4"
+# out_path="/home/truebelief/xzx/prj/depth/consistent_depth/results/"+fname+'/'
+# # camera_params="793.7008, 270, 480"
+# camera_params="793.7008, 288, 512"
+# camera_model="SIMPLE_PINHOLE"\
+
+
 
 
 class Video3dParamsParser:
-    def __init__(self):
+    def __init__(self,in_path,in_video,out_path,camera_params):
         self.parser = argparse.ArgumentParser()
         self.initialized = False
+        self.in_path=in_path
+        self.in_video=in_video
+        self.out_path=out_path
+        self.camera_params=camera_params
+        self.camera_model="SIMPLE_PINHOLE"
+
 
     def initialize(self):
+
         self.parser.add_argument("--op",
             choices=["all", "extract_frames"], default="all")
 
         self.parser.add_argument("--path", type=str,
+                                 default=self.out_path,
             help="Path to all the input (except for the video) and output files "
             " are stored.")
 
-        self.parser.add_argument("--video_file", type=str,
-            help="Path to input video file. Will be ignored if `color_full` and "
-            "`frames.txt` are already present.")
+        self.parser.add_argument("--frame_path", type=str,
+                                 default=self.in_path,
+            help="Path to all the input (except for the video) and output files "
+            " are stored.")
+
+        self.parser.add_argument("--frame_count", type=str,
+                                 default=len(glob.glob(os.path.join(self.in_path,'*_human.png'))),
+            help="Path to all the input (except for the video) and output files "
+            " are stored.")
+
+        self.parser.add_argument("--camera_params", type=str,
+                                 default=self.camera_params,
+            help="Camera intrinsic parameters.")
+
+        self.parser.add_argument("--camera_model", type=str,
+                                 default=self.camera_model,
+            help="Camera model type.")
+
+        # self.parser.add_argument("--video_file", type=str,
+        #                          default=os.path.join(self.in_path,self.in_video),
+        #     help="Path to input video file. Will be ignored if `color_full` and "
+        #     "`frames.txt` are already present.")
 
         self.parser.add_argument("--configure",
             choices=["default", "kitti"], default="default")
@@ -81,7 +121,7 @@ class Video3dParamsParser:
         )
 
     def add_make_video_args(self):
-        self.parser.add_argument("--make_video", action="store_true")
+        self.parser.add_argument("--make_video", default="true")
         MakeVideoParams.add_arguments(self.parser)
 
     def print(self):
@@ -108,6 +148,7 @@ class Video3dParamsParser:
 
         # Resolve unspecified parameters
         model = get_depth_model(self.params.model_type)
+
 
         if self.params.align <= 0:
             self.params.align = model.align

@@ -87,28 +87,26 @@ class VideoDataset(data.Dataset):
         <flow_list.json>: [[i, j], ...]
     """
 
-    def __init__(self, path: str, meta_file: str = None):
+    def __init__(self, path: str, meta_file: str = None,valid_frames=None):
         """
         Args:
             path: folder path of the 3D video
         """
         self.color_fmt = pjoin(path, "color_down", "frame_{:06d}.raw")
-        if not os.path.isfile(self.color_fmt.format(0)):
-            self.color_fmt = pjoin(path, "color_down", "frame_{:06d}.png")
+        if not os.path.isfile(self.color_fmt.format(valid_frames[0])):
+            self.color_fmt = pjoin(path, "color_down_png", "frame_{:06d}.png")
 
         self.mask_fmt = pjoin(path, "mask", "mask_{:06d}_{:06d}.png")
         self.flow_fmt = pjoin(path, "flow", "flow_{:06d}_{:06d}.raw")
+
+        self.valid_frames=valid_frames
 
         if meta_file is not None:
             with open(meta_file, "rb") as f:
                 meta = np.load(f)
                 self.extrinsics = torch.tensor(meta["extrinsics"], dtype=_dtype)
                 self.intrinsics = torch.tensor(meta["intrinsics"], dtype=_dtype)
-            assert (
-                self.extrinsics.shape[0] == self.intrinsics.shape[0]
-            ), "#extrinsics({}) != #intrinsics({})".format(
-                self.extrinsics.shape[0], self.intrinsics.shape[0]
-            )
+            assert (self.extrinsics.shape[0] == self.intrinsics.shape[0]), "#extrinsics({}) != #intrinsics({})".format(self.extrinsics.shape[0], self.intrinsics.shape[0])
 
         flow_list_fn = pjoin(path, "flow_list.json")
         if os.path.isfile(flow_list_fn):
@@ -123,6 +121,8 @@ class VideoDataset(data.Dataset):
             ]
             self.flow_indices = sampling.to_in_range(self.flow_indices)
         self.flow_indices = list(sampling.SamplePairs.to_one_way(self.flow_indices))
+
+
 
     def parse_index_pair(self, name):
         strs = os.path.splitext(name)[0].split("_")[-2:]
@@ -169,21 +169,12 @@ class VideoDataset(data.Dataset):
         pair = self.flow_indices[index]
 
         indices = torch.tensor(pair)
-        intrinsics = torch.stack([self.intrinsics[k] for k in pair], dim=0)
-        extrinsics = torch.stack([self.extrinsics[k] for k in pair], dim=0)
+        intrinsics = torch.stack([self.intrinsics[self.valid_frames.index(k)] for k in pair], dim=0)
+        extrinsics = torch.stack([self.extrinsics[self.valid_frames.index(k)] for k in pair], dim=0)
 
-        images = torch.stack(
-            [load_color(self.color_fmt.format(k), channels_first=True) for k in pair],
-            dim=0,
-        )
-        flows = [
-            load_flow(self.flow_fmt.format(k_ref, k_tgt), channels_first=True)
-            for k_ref, k_tgt in [pair, pair[::-1]]
-        ]
-        masks = [
-            load_mask(self.mask_fmt.format(k_ref, k_tgt), channels_first=True)
-            for k_ref, k_tgt in [pair, pair[::-1]]
-        ]
+        images = torch.stack([load_color(self.color_fmt.format(k), channels_first=True) for k in pair],dim=0,)
+        flows = [load_flow(self.flow_fmt.format(k_ref, k_tgt), channels_first=True) for k_ref, k_tgt in [pair, pair[::-1]]]
+        masks = [load_mask(self.mask_fmt.format(k_ref, k_tgt), channels_first=True) for k_ref, k_tgt in [pair, pair[::-1]]]
 
         metadata = {
             "extrinsics": extrinsics,
@@ -197,13 +188,9 @@ class VideoDataset(data.Dataset):
 
         if getattr(self, "scales", None):
             if isinstance(self.scales, dict):
-                metadata["scales"] = torch.stack(
-                    [torch.Tensor([self.scales[k]]) for k in pair], dim=0
-                )
+                metadata["scales"] = torch.stack([torch.Tensor([self.scales[k]]) for k in pair], dim=0)
             else:
-                metadata["scales"] = torch.Tensor(
-                    [self.scales, self.scales]).reshape(2, 1)
-
+                metadata["scales"] = torch.Tensor([self.scales, self.scales]).reshape(2, 1)
         return (images, metadata)
 
     def __len__(self):
